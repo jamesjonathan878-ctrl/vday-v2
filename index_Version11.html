@@ -150,7 +150,7 @@
       Will you be my Valentine?
     </p>
 
-    <div class="controls" aria-hidden="false">
+    <div class="controls">
       <button id="yesBtn" aria-label="Say yes">Yes 💖</button>
       <button id="noBtn" aria-label="No (playful)" tabindex="0">No 😅</button>
     </div>
@@ -181,13 +181,15 @@
         document.body.appendChild(canvas);
 
         const ctx = canvas.getContext('2d');
-        let width = canvas.width = window.innerWidth;
-        let height = canvas.height = window.innerHeight;
+        let width = canvas.width = Math.floor(window.innerWidth * (window.devicePixelRatio || 1));
+        let height = canvas.height = Math.floor(window.innerHeight * (window.devicePixelRatio || 1));
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+        ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
 
         const colors = ['#ff4d6d', '#ffd166', '#06d6a0', '#6a4cff', '#ff7ab6', '#4dd0e1'];
         const gravity = 0.3;
         const drag = 0.005;
-        const terminal = 10;
 
         function rand(min, max) { return Math.random() * (max - min) + min; }
 
@@ -215,7 +217,7 @@
             this.y += this.vy;
             this.rotate += this.vr;
             // fade when below bottom
-            if (this.y > height - 20) this.opacity -= 0.03;
+            if (this.y > (window.innerHeight - 20)) this.opacity -= 0.03;
           }
 
           draw(ctx) {
@@ -235,7 +237,7 @@
           }
 
           isAlive() {
-            return this.opacity > 0 && this.x > -50 && this.x < width + 50;
+            return this.opacity > 0 && this.x > -50 && this.x < window.innerWidth + 50;
           }
         }
 
@@ -243,34 +245,43 @@
         let lastTime = performance.now();
 
         function resize() {
-          width = canvas.width = window.innerWidth;
-          height = canvas.height = window.innerHeight;
+          width = canvas.width = Math.floor(window.innerWidth * (window.devicePixelRatio || 1));
+          height = canvas.height = Math.floor(window.innerHeight * (window.devicePixelRatio || 1));
+          canvas.style.width = window.innerWidth + 'px';
+          canvas.style.height = window.innerHeight + 'px';
+          ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
         }
         window.addEventListener('resize', resize);
 
         // burst at center-top area a few times
         const burstCount = 6;
         let bursts = 0;
-        const burstInterval = 250; // ms between bursts
-        let burstTimer = setInterval(() => {
-          spawnBurst();
-          bursts++;
-          if (bursts >= burstCount) clearInterval(burstTimer);
-        }, burstInterval);
+        let active = true;
 
         function spawnBurst() {
-          const cx = width / 2;
-          const cy = height * 0.25;
+          if (!active) return;
+          const cx = window.innerWidth / 2;
+          const cy = window.innerHeight * 0.25;
           const count = Math.floor(rand(18, 28));
           for (let i = 0; i < count; i++) {
             particles.push(new Particle(cx + rand(-60, 60), cy + rand(-30, 30)));
           }
         }
 
+        // spawn an initial burst immediately to avoid animation race
+        spawnBurst();
+        const burstInterval = 250; // ms between bursts
+        const burstTimer = setInterval(() => {
+          spawnBurst();
+          bursts++;
+          if (bursts >= burstCount) clearInterval(burstTimer);
+        }, burstInterval);
+
         // also keep spawning small trickles for the duration
-        let trickleTimer = setInterval(() => {
-          const x = rand(width*0.15, width*0.85);
-          const y = height * 0.15;
+        const trickleTimer = setInterval(() => {
+          if (!active) return;
+          const x = rand(window.innerWidth*0.15, window.innerWidth*0.85);
+          const y = window.innerHeight * 0.15;
           const count = Math.floor(rand(2, 6));
           for (let i = 0; i < count; i++) {
             particles.push(new Particle(x + rand(-20, 20), y + rand(-10, 10)));
@@ -280,7 +291,7 @@
         function frame(now) {
           const dt = now - lastTime;
           lastTime = now;
-          ctx.clearRect(0, 0, width, height);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
 
           // update & draw particles
           for (let i = particles.length - 1; i >= 0; i--) {
@@ -293,7 +304,7 @@
             p.draw(ctx);
           }
 
-          if (particles.length > 0) requestAnimationFrame(frame);
+          if (particles.length > 0 || active) requestAnimationFrame(frame);
           else {
             cleanup();
           }
@@ -303,13 +314,18 @@
         setTimeout(() => {
           clearInterval(trickleTimer);
           // allow existing particles to finish; frame loop continues until none left
+          // mark as not active so spawnBurst/trickle won't add further
+          active = false;
         }, duration);
 
         // start animation loop
         requestAnimationFrame(frame);
 
         function cleanup() {
+          active = false;
           window.removeEventListener('resize', resize);
+          clearInterval(burstTimer);
+          clearInterval(trickleTimer);
           if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
         }
       }
@@ -351,6 +367,9 @@
         const y = padding + Math.floor(Math.random() * (maxTop + 1));
 
         // set position relative to card (card is position:relative)
+        // Clear any conflicting right/bottom values that can cause layout issues
+        noBtn.style.right = 'auto';
+        noBtn.style.bottom = 'auto';
         noBtn.style.left = x + 'px';
         noBtn.style.top = y + 'px';
       }
@@ -360,8 +379,17 @@
       requestAnimationFrame(moveNoBtn);
 
       // handle pointer and keyboard interactions
+      // track last input type so keyboard users aren't surprised
+      let lastInteractionWasPointer = false;
+      window.addEventListener('pointerdown', () => { lastInteractionWasPointer = true; }, { passive: true });
+      window.addEventListener('keydown', () => { lastInteractionWasPointer = false; }, { passive: true });
+
       noBtn.addEventListener('mouseover', moveNoBtn, { passive: true });
-      noBtn.addEventListener('focus', moveNoBtn);
+      // Only trigger movement on focus if the last interaction was pointer (avoid trapping keyboard users)
+      noBtn.addEventListener('focus', (ev) => {
+        if (lastInteractionWasPointer) moveNoBtn();
+      });
+
       // for touch devices, prevent the first tap from activating; instead move it
       noBtn.addEventListener('touchstart', function (ev) {
         ev.preventDefault(); // stop immediate click on touch
