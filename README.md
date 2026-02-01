@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Be My Valentine 💖</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root {
+      --bg1: #ff9a9e;
+      --bg2: #fad0c4;
+      --accent: #ff4d6d;
+    }
+
+    /* Respect user preference to reduce motion */
+    @media (prefers-reduced-motion: reduce) {
+      .heart { display: none; }
+      .heart.animate { animation: none !important; }
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'Comic Sans MS', cursive, sans-serif;
+      background: linear-gradient(135deg, var(--bg1), var(--bg2));
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+      text-align: center;
+    }
+
+    .card {
+      background: white;
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+      max-width: 400px;
+      width: calc(100% - 40px);
+      position: relative; /* make absolute children positioned inside the card */
+      box-sizing: border-box;
+    }
+
+    h1 {
+      color: var(--accent);
+      font-size: 2.2em;
+      margin: 0 0 8px;
+    }
+
+    p {
+      font-size: 1.15em;
+      margin: 0 0 18px;
+      line-height: 1.3;
+    }
+
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      position: relative;
+      padding-top: 8px;
+    }
+
+    button {
+      padding: 12px 22px;
+      font-size: 1em;
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.12s;
+      user-select: none;
+    }
+
+    button:active { transform: scale(0.98); }
+
+    #yesBtn {
+      background: var(--accent);
+      color: white;
+    }
+
+    #yesBtn:hover { background: #ff1e4d; }
+
+    /* The no button is positioned absolutely inside the card and will move around */
+    #noBtn {
+      background: #ddd;
+      color: #222;
+      position: absolute;
+      right: 20px;
+      bottom: 18px;
+      /* ensure it appears above floating hearts */
+      z-index: 5;
+    }
+
+    /* floating hearts placed on body */
+    .heart {
+      position: fixed;
+      color: var(--accent);
+      font-size: 20px;
+      opacity: 0.85;
+      pointer-events: none;
+      will-change: transform, opacity;
+      z-index: 1;
+    }
+
+    /* animation: hearts float up and fade */
+    @keyframes floatUp {
+      0% {
+        transform: translateY(0) scale(1);
+        opacity: 0.9;
+      }
+      80% {
+        opacity: 0.8;
+      }
+      100% {
+        transform: translateY(-120vh) scale(1.15);
+        opacity: 0;
+      }
+    }
+
+    .heart.animate {
+      animation-name: floatUp;
+      animation-timing-function: linear;
+      animation-fill-mode: forwards;
+    }
+
+    /* mobile-friendly adjustments */
+    @media (max-width: 420px) {
+      h1 { font-size: 1.6em; }
+      .card { padding: 28px; }
+      #noBtn { right: 14px; bottom: 12px; }
+    }
+
+    /* small helper to keep celebration content nicely centered inside card */
+    .celebrate {
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      align-items:center;
+      gap:12px;
+      height:100%;
+      text-align:center;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card" role="region" aria-labelledby="valTitle">
+    <h1 id="valTitle">Hey Brooke Bryant ❤️</h1>
+    <p>
+      To the love of my life...<br>
+      Will you be my Valentine?
+    </p>
+
+    <div class="controls">
+      <button id="yesBtn" aria-label="Say yes">Yes 💖</button>
+      <button id="noBtn" aria-label="No (playful)" tabindex="0">No 😅</button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const yesBtn = document.getElementById('yesBtn');
+      const noBtn = document.getElementById('noBtn');
+      const card = document.querySelector('.card');
+
+      // Ensure ARIA attributes present
+      yesBtn.setAttribute('aria-pressed', 'false');
+
+      // Confetti: simple canvas-based particle system
+      function startConfetti(duration = 4000) {
+        // Respect prefers-reduced-motion
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+        const canvas = document.createElement('canvas');
+        canvas.style.position = 'fixed';
+        canvas.style.left = '0';
+        canvas.style.top = '0';
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.style.pointerEvents = 'none';
+        canvas.style.zIndex = 9999;
+        document.body.appendChild(canvas);
+
+        const ctx = canvas.getContext('2d');
+        let width = canvas.width = Math.floor(window.innerWidth * (window.devicePixelRatio || 1));
+        let height = canvas.height = Math.floor(window.innerHeight * (window.devicePixelRatio || 1));
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+        ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+
+        const colors = ['#ff4d6d', '#ffd166', '#06d6a0', '#6a4cff', '#ff7ab6', '#4dd0e1'];
+        const gravity = 0.3;
+        const drag = 0.005;
+
+        function rand(min, max) { return Math.random() * (max - min) + min; }
+
+        class Particle {
+          constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.size = rand(6, 12);
+            const speed = rand(6, 12);
+            const angle = rand(-Math.PI/2 - 0.8, -Math.PI/2 + 0.8); // up spread
+            this.vx = Math.cos(angle) * speed;
+            this.vy = Math.sin(angle) * speed;
+            this.rotate = rand(0, 2*Math.PI);
+            this.vr = rand(-0.25, 0.25);
+            this.color = colors[Math.floor(rand(0, colors.length))];
+            this.shape = Math.random() < 0.5 ? 'rect' : 'circle';
+            this.opacity = 1;
+          }
+
+          update() {
+            this.vy += gravity * (this.size / 10);
+            this.vx *= (1 - drag);
+            this.vy *= (1 - drag*0.5);
+            this.x += this.vx;
+            this.y += this.vy;
+            this.rotate += this.vr;
+            // fade when below bottom
+            if (this.y > (window.innerHeight - 20)) this.opacity -= 0.03;
+          }
+
+          draw(ctx) {
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, this.opacity);
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.rotate);
+            ctx.fillStyle = this.color;
+            if (this.shape === 'rect') {
+              ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size * 0.6);
+            } else {
+              ctx.beginPath();
+              ctx.arc(0, 0, this.size/1.6, 0, Math.PI*2);
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+
+          isAlive() {
+            return this.opacity > 0 && this.x > -50 && this.x < window.innerWidth + 50;
+          }
+        }
+
+        let particles = [];
+        let lastTime = performance.now();
+
+        function resize() {
+          width = canvas.width = Math.floor(window.innerWidth * (window.devicePixelRatio || 1));
+          height = canvas.height = Math.floor(window.innerHeight * (window.devicePixelRatio || 1));
+          canvas.style.width = window.innerWidth + 'px';
+          canvas.style.height = window.innerHeight + 'px';
+          ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+        }
+        window.addEventListener('resize', resize);
+
+        // burst at center-top area a few times
+        const burstCount = 6;
+        let bursts = 0;
+        let active = true;
+
+        function spawnBurst() {
+          if (!active) return;
+          const cx = window.innerWidth / 2;
+          const cy = window.innerHeight * 0.25;
+          const count = Math.floor(rand(18, 28));
+          for (let i = 0; i < count; i++) {
+            particles.push(new Particle(cx + rand(-60, 60), cy + rand(-30, 30)));
+          }
+        }
+
+        // spawn an initial burst immediately to avoid animation race
+        spawnBurst();
+        const burstInterval = 250; // ms between bursts
+        const burstTimer = setInterval(() => {
+          spawnBurst();
+          bursts++;
+          if (bursts >= burstCount) clearInterval(burstTimer);
+        }, burstInterval);
+
+        // also keep spawning small trickles for the duration
+        const trickleTimer = setInterval(() => {
+          if (!active) return;
+          const x = rand(window.innerWidth*0.15, window.innerWidth*0.85);
+          const y = window.innerHeight * 0.15;
+          const count = Math.floor(rand(2, 6));
+          for (let i = 0; i < count; i++) {
+            particles.push(new Particle(x + rand(-20, 20), y + rand(-10, 10)));
+          }
+        }, 120);
+
+        function frame(now) {
+          const dt = now - lastTime;
+          lastTime = now;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          // update & draw particles
+          for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.update();
+            if (!p.isAlive()) {
+              particles.splice(i, 1);
+              continue;
+            }
+            p.draw(ctx);
+          }
+
+          if (particles.length > 0 || active) requestAnimationFrame(frame);
+          else {
+            cleanup();
+          }
+        }
+
+        // stop spawning after duration
+        setTimeout(() => {
+          clearInterval(trickleTimer);
+          // allow existing particles to finish; frame loop continues until none left
+          // mark as not active so spawnBurst/trickle won't add further
+          active = false;
+        }, duration);
+
+        // start animation loop
+        requestAnimationFrame(frame);
+
+        function cleanup() {
+          active = false;
+          window.removeEventListener('resize', resize);
+          clearInterval(burstTimer);
+          clearInterval(trickleTimer);
+          if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
+        }
+      }
+
+      // Say yes: replace content with celebration (keeps font & prefers-reduced-motion safe)
+      function sayYes() {
+        yesBtn.setAttribute('aria-pressed', 'true');
+
+        // Replace only the card so global DOM (hearts, audio, etc.) isn't removed
+        card.innerHTML = `
+          <div class="celebrate" aria-live="polite">
+            <h1 style="color:#ff1e4d; margin:0;">YAY!!! 💘</h1>
+            <p style="font-size:1.5em; margin:0;">You just made me the happiest person ever 🥰</p>
+            <p style="font-size:2em; margin:0;">💖💖💖</p>
+          </div>
+        `;
+
+        // Start confetti for a short burst
+        startConfetti(4500);
+      }
+
+      yesBtn.addEventListener('click', sayYes);
+      yesBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sayYes(); }
+      });
+
+      // Move the "No" button somewhere inside the card so it doesn't jump off-screen.
+      function moveNoBtn() {
+        // compute sizes relative to the card
+        const cardRect = card.getBoundingClientRect();
+        const btnRect = noBtn.getBoundingClientRect();
+
+        const padding = 10; // inner padding from card edges
+        const maxLeft = Math.max(0, cardRect.width - btnRect.width - padding * 2);
+        const maxTop = Math.max(0, cardRect.height - btnRect.height - padding * 2);
+
+        // choose random position inside the card's content area
+        const x = padding + Math.floor(Math.random() * (maxLeft + 1));
+        const y = padding + Math.floor(Math.random() * (maxTop + 1));
+
+        // set position relative to card (card is position:relative)
+        // Clear any conflicting right/bottom values that can cause layout issues
+        noBtn.style.right = 'auto';
+        noBtn.style.bottom = 'auto';
+        noBtn.style.left = x + 'px';
+        noBtn.style.top = y + 'px';
+      }
+
+      // initial placement so the button is not overlapping initial elements
+      // run after next paint to ensure measurements are correct
+      requestAnimationFrame(moveNoBtn);
+
+      // handle pointer and keyboard interactions
+      // track last input type so keyboard users aren't surprised
+      let lastInteractionWasPointer = false;
+      window.addEventListener('pointerdown', () => { lastInteractionWasPointer = true; }, { passive: true });
+      window.addEventListener('keydown', () => { lastInteractionWasPointer = false; }, { passive: true });
+
+      noBtn.addEventListener('mouseover', moveNoBtn, { passive: true });
+      // Only trigger movement on focus if the last interaction was pointer (avoid trapping keyboard users)
+      noBtn.addEventListener('focus', (ev) => {
+        if (lastInteractionWasPointer) moveNoBtn();
+      });
+
+      // for touch devices, prevent the first tap from activating; instead move it
+      noBtn.addEventListener('touchstart', function (ev) {
+        ev.preventDefault(); // stop immediate click on touch
+        moveNoBtn();
+      }, { passive: false });
+
+      // If user somehow clicks "No" (fast tap), still be polite — show a playful message
+      noBtn.addEventListener('click', function () {
+        // small surprise if they manage to click
+        const msg = document.createElement('div');
+        msg.textContent = "Aww, you're shy! 🥲";
+        msg.style.position = 'absolute';
+        msg.style.left = '50%';
+        msg.style.top = '-28px';
+        msg.style.transform = 'translateX(-50%)';
+        msg.style.background = '#fff';
+        msg.style.padding = '6px 10px';
+        msg.style.borderRadius = '12px';
+        msg.style.boxShadow = '0 8px 20px rgba(0,0,0,0.12)';
+        msg.style.fontSize = '0.95em';
+        msg.style.zIndex = 6;
+        card.appendChild(msg);
+        setTimeout(() => msg.remove(), 1500);
+        moveNoBtn();
+      });
+
+      // Floating hearts (respect user's reduced-motion setting)
+      const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!prefersReduced) {
+        const createHeart = () => {
+          const heart = document.createElement('div');
+          heart.className = 'heart animate';
+          heart.textContent = '❤️';
+
+          // random horizontal position across viewport
+          const left = Math.random() * 100;
+          heart.style.left = left + 'vw';
+
+          // random size & duration
+          const size = 14 + Math.random() * 28; // px
+          heart.style.fontSize = size + 'px';
+          const dur = (3 + Math.random() * 3).toFixed(2); // seconds
+          heart.style.animationDuration = dur + 's';
+
+          // append and remove when animation ends
+          document.body.appendChild(heart);
+          heart.addEventListener('animationend', () => heart.remove());
+        };
+
+        // throttle hearts so they don't overwhelm CPU on low-end devices
+        let interval = 300; // ms between hearts
+        // increase interval on small screens
+        if (window.innerWidth < 500) interval = 400;
+
+        const heartTimer = setInterval(createHeart, interval);
+
+        // stop creating hearts after some time to be polite
+        setTimeout(() => clearInterval(heartTimer), 30_000);
+      }
+
+      // Reposition the noBtn on resize to keep it visible
+      let resizeTimer;
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(moveNoBtn, 120);
+      });
+    })();
+  </script>
+
+</body>
+</html>
